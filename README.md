@@ -533,6 +533,10 @@ can be skipped when it is already there). The build never contains settings, cac
 settings, caches, `mods\` and `log.txt` in `run\` (`MHGU_HOME`), keeping `build\` clean. Starting
 `build\mhgurecomp.exe` directly also works, but then it writes those into `build\`.
 
+The `Build Windows runtime only` GitHub Actions workflow also builds `mhgurecomp.exe` on pushes to the `radiance` branch
+or when manually run. Its artifact contains only the executable—not its MSYS2 DLL dependencies, `mhgugame.dll`, or
+game data—so it is for build validation, not a standalone or playable build.
+
 Useful targets and options:
 
 - `make test-lift`: checks the recompiler against the Unicorn CPU emulator on thousands of the game's instructions.

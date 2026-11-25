@@ -1,0 +1,41 @@
+name: Build Windows runtime only
+
+on:
+  push:
+    branches:
+      - radiance
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            git
+            diffutils
+            mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-lld
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-sdl3
+            mingw-w64-ucrt-x86_64-shaderc
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-vulkan-headers
+            mingw-w64-ucrt-x86_64-vulkan-loader
+            mingw-w64-ucrt-x86_64-vulkan-memory-allocator
+
+      - name: Build runtime executable
+        shell: msys2 {0}
+        run: make -j2 build/mhgurecomp.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mhgurecomp-windows-runtime-only
+          path: build/mhgurecomp.exe
+          if-no-files-found: error
