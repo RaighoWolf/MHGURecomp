@@ -1,3 +1,4 @@
+#include "radiance_present.h"
 // A small Horizon kernel for an AArch32 process: handles, threads, synchronization, memory, and the SVC
 // dispatcher. Register usage follows the 32-bit SVC ABI (the SDK's svc stubs: 64-bit values in register pairs,
 // fifth and later arguments in r4+).
@@ -8,6 +9,7 @@
 
 #include "hle.h"
 #include "kernel.h"
+#include "config.h"
 #include "pause.h"
 
 // ------------------------------------------------------------------ results
@@ -483,6 +485,7 @@ out:
 
 // ------------------------------------------------------------------ SVC dispatch
 static void debug_string(uint32_t p, uint32_t len) {
+    if (len == 14 && radiance_present_packet(gstr(p), len)) return;
     fprintf(stderr, "[guest] %.*s", (int)len, gstr(p));
     if (len && gstr(p)[len - 1] != '\n') fputc('\n', stderr);
 }
@@ -512,6 +515,11 @@ static uint64_t get_info(uint32_t id0, uint32_t handle, uint64_t id1, uint32_t *
     case 16: case 17: return 0;
     case 18: return TITLE_ID;
     case 20: return 0;
+    // Right-hand HUD translation beyond 16:9, in Q16 units of picture height.
+    case 0x4D485549u: {
+        const float extra = g_ui_anchor_aspect - 16.0f / 9.0f;
+        return extra > 0.0f ? (uint32_t)(extra * 32768.0f + 0.5f) : 0;
+    }
     default:
         *res = R_INVALID_ENUM;
         LOG("[kernel] GetInfo unknown id %u/%llu\n", id0, (unsigned long long)id1);

@@ -975,7 +975,8 @@ void vk_save_png(const char *path, const uint8_t *rgba, uint32_t w, uint32_t h) 
 }
 
 // ================================================================== presentation (nvnQueuePresentTexture)
-void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh);  // (exec.c)
+#include "../../radiance_present.h"
+unsigned vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh);  // (exec.c)
 
 static uint64_t g_frames;
 uint64_t vk_frame_counter(void) { return g_frames; }
@@ -1017,15 +1018,17 @@ void backend_present(NvnTexture *t) {
         // the game's image, as large as fits with its aspect ratio, centred
         double ww = g_vk.sc_extent.width, wh = g_vk.sc_extent.height, s = fmin(ww / t->width, wh / t->height);
         double vw = t->width * s, vh = t->height * s;
-        vk_present_draw(vk_cmd(), b, (float)((ww - vw) / 2), (float)((wh - vh) / 2), (float)vw, (float)vh);
+        unsigned effects = vk_present_draw(vk_cmd(), b, (float)((ww - vw) / 2), (float)((wh - vh) / 2), (float)vw, (float)vh);
         OverlayTarget ot = {g_vk.inst, g_vk.phys, g_vk.dev, g_vk.qfam, g_vk.queue, g_vk.pcache, sc_pass,
                             g_vk.sc_extent.width, g_vk.sc_extent.height};
-        overlay_draw(vk_cmd(), &ot);  // (Forge plugins' ImGui overlay, over the game: runtime/overlay.cpp)
+        if (!radiance_present_compare()) overlay_draw(vk_cmd(), &ot);  // (Forge plugins' ImGui overlay, over the game: runtime/overlay.cpp)
         char path[300];
         extern char g_shot_request[256];  // (runtime/host_input.c: MHGU_CONTROL "shot <name>")
         extern char g_burst_name[200];
         extern int g_burst_left, g_burst_index;
         if (!g_shot_request[0] && g_burst_left > 0) {
+            if (effects && radiance_present_compare())
+                LOG("[radiance] %s_%d mask=%u\n", g_burst_name, g_burst_index, effects);
             g_burst_left--;
             snprintf(g_shot_request, sizeof g_shot_request, "shots/%s_%d.png", g_burst_name, g_burst_index++);
         }

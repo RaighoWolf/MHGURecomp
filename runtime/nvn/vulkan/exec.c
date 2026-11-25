@@ -4924,6 +4924,7 @@ static void copy_texture(const TexRef *src, const TexRef *dst, uint64_t flags) {
 }
 
 // ================================================================== presentation helper (device.c)
+#include "../../radiance_present.h"
 VkRenderPass vk_window_pass(void);
 static VkPipelineLayout present_layout;
 static VkDescriptorSetLayout present_set_layout;
@@ -4941,7 +4942,7 @@ static VkPipeline present_pipeline(bool hdr) {
         VkDescriptorSetLayoutBinding b = {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, NULL};
         VkDescriptorSetLayoutCreateInfo li = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .bindingCount = 1, .pBindings = &b};
         VK_CHECK(vkCreateDescriptorSetLayout(g_vk.dev, &li, NULL, &present_set_layout));
-        VkPushConstantRange r = {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 48};
+        VkPushConstantRange r = {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 96};
         VkPipelineLayoutCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1,
                                          .pSetLayouts = &present_set_layout, .pushConstantRangeCount = 1, .pPushConstantRanges = &r};
         VK_CHECK(vkCreatePipelineLayout(g_vk.dev, &ci, NULL, &present_layout));
@@ -4983,8 +4984,8 @@ static VkImageView raw_view(TexBackend *b) {
 }
 
 // Inside the window image's render pass (device.c): the game image into (vx, vy, vw, vh).
-void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh) {
-    if (!b || !b->image || (b->aspect & ~VK_IMAGE_ASPECT_COLOR_BIT)) return;
+unsigned vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh) {
+    if (!b || !b->image || (b->aspect & ~VK_IMAGE_ASPECT_COLOR_BIT)) return 0;
     bool hdr = vk_hdr_presented_bt2020();
     VkPipeline p = present_pipeline(hdr);
     VkDescriptorSet ds = vk_alloc_set(present_set_layout);
@@ -4996,10 +4997,13 @@ void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, floa
     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, present_layout, 0, 1, &ds, 0, NULL);
     VkViewport vp = {vx, vy, vw, vh, 0, 1};
     vkCmdSetViewport(cb, 0, 1, &vp);
-    float pv[12] = {nvn_window_origin() == 0 ? 1.0f : 0.0f, 0, 0, 0, 0, 0, 1, 1,  // (flip, crop origin / size)
+    float pv[24] = {nvn_window_origin() == 0 ? 1.0f : 0.0f, 0, 0, 0, 0, 0, 1, 1,  // (flip, crop origin / size)
                     hdr ? vk_hdr_gamma() : 0, 0, 0, 0};                       // (HDR: the intermediate's gamma)
-    vkCmdPushConstants(cb, present_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 48, pv);
+    pv[1] = radiance_present_compare() ? 1.0f : 0.0f;
+    unsigned effects = radiance_present_sample(pv + 12, pv[0] > 0.5f);
+    vkCmdPushConstants(cb, present_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pv), pv);
     vkCmdDraw(cb, 3, 1, 0, 0);
+    return effects;
 }
 
 // ================================================================== executor

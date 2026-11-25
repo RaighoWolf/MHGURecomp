@@ -293,15 +293,18 @@ static const char *builtin_src(const char *name, int *stage) {
                "layout(set = 0, binding = 0) uniform sampler2D t;\n"
                "layout(location = 0) in vec2 uv;\n"
                "layout(location = 0) out vec4 o;\n"
-               "void main() { o = vec4(texture(t, uv).rgb, 1.0); }\n";
+               "layout(push_constant) uniform P { vec4 a; vec4 crop; vec4 h; vec4 draw; vec4 contact; vec4 fan; } pc;\n"
+#include "radiance_glsl.inc"
+               "void main() { o = vec4(radiance_scene(t, uv, pc.draw, pc.contact, pc.fan, pc.a.y), 1.0); }\n";
     }
     if (!strcmp(name, "present.frag.hdr")) {  // (exec.c present_pipeline: BT.2020 -> BT.709, in the HDR encoding)
         *stage = STAGE_FRAGMENT;
         return "#version 450\n"
                "layout(set = 0, binding = 0) uniform sampler2D t;\n"
-               "layout(push_constant) uniform P { vec4 a; vec4 crop; vec4 h; } pc;\n"
+               "layout(push_constant) uniform P { vec4 a; vec4 crop; vec4 h; vec4 draw; vec4 contact; vec4 fan; } pc;\n"
                "layout(location = 0) in vec2 uv;\n"
                "layout(location = 0) out vec4 o;\n"
+#include "radiance_glsl.inc"
                "vec3 spow(vec3 c, float e) { return sign(c) * pow(abs(c), vec3(e)); }\n"
                "vec3 dec(vec3 c) {\n"
                "  if (pc.h.x > 0.0) return spow(c, pc.h.x);\n"
@@ -314,7 +317,7 @@ static const char *builtin_src(const char *name, int *stage) {
                "  return sign(l) * mix(a * 12.92, 1.055 * pow(a, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), a));\n"
                "}\n"
                "void main() {\n"
-               "  vec3 c = dec(texture(t, uv).rgb);\n"
+               "  vec3 c = dec(radiance_scene(t, uv, pc.draw, pc.contact, pc.fan, pc.a.y));\n"
                "  c = vec3(dot(vec3(1.6604910, -0.5876411, -0.0728499), c), dot(vec3(-0.1245505, 1.1328999, -0.0083494), c),\n"
                "           dot(vec3(-0.0181508, -0.1005789, 1.1187297), c));\n"
                "  o = vec4(enc(c), 1.0);\n"
